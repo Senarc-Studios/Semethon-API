@@ -17,6 +17,10 @@ session_increment = []
 
 web = Flask(__name__)
 
+async def auto_purge_message(message_id):
+    await asyncio.sleep(5)
+    temp.delete_one({ "_id": message_id })
+
 def generate_token(size=8, chars=string.ascii_uppercase + string.ascii_lowercase + string.digits):
 	return ''.join(random.choice(chars) for _ in range(size))
 
@@ -124,7 +128,7 @@ def _send_message(username, token, esm):
         return json.dumps({ "complete": False, "reason": "User not in session.", "code": "I02" }), 400
 
 def is_sent_before(username, token, message_id):
-    for data in temp.find({ "message_id": message_id, "session": token }):
+    for data in temp.find({ "_id": message_id, "session": token }):
         if data["users"][username] == False:
             return False
 
@@ -134,16 +138,16 @@ def is_sent_before(username, token, message_id):
 def _fetch_messages(username, token):
     if username in connected_users(token):
         for message in temp.find({}):
-            if message["session"] == token and is_sent_before(username, token, message["message_id"]):
+            if message["session"] == token and is_sent_before(username, token, message["_id"]):
                 query = {
-                    "_id": message["message_id"],
+                    "_id": message["_id"],
                     "session": token,
                     "esm": message["esm"]
                 }
 
                 update_payload = {
                     "$set": {
-                        "_id": message["message_id"],
+                        "_id": message["_id"],
                         "users": {
                             f"{username}": True
                         }
