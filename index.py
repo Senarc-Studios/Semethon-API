@@ -26,6 +26,28 @@ def connected_users(token):
     for session in session.find({ "token": token }):
         return session["connected_users"]
 
+def add_user_to_session(token, username):
+    query = {
+        "token": token
+    }
+    payload = {
+        "$addToSet": {
+            "connected_users": username
+        }
+    }
+    session.update_one(query, payload)
+
+def remove_user_from_session(token, username):
+    query = {
+        "token": token
+    }
+    payload = {
+        "$pull": {
+            "connected_users": username
+        }
+    }
+    session.update_one(quey, payload)
+
 def validate_username(username):
     if len(username) >= 20 or len(username) <= 3:
         return False
@@ -35,7 +57,7 @@ def validate_username(username):
 
 def _create_session(username):
     if not validate_username(username):
-        return { "complete": False, "reason": "Bad name", "code": "B01" }
+        return json.dumps({ "complete": False, "reason": "Bad name", "code": "B01" }), 400
 
     token = generate_token()
     token = f"{token}"
@@ -51,11 +73,22 @@ def _create_session(username):
         session_increment.append(0)
     else:
         session_increment.append(len(session_increment))
-    return { "complete": True }
+    return json.dumps({ "token": token }), 200, {'content-type': 'application/json'}
+
+def _join_session(username, token):
+    if not validate_username(username):
+        return json.dumps({ "complete": False, "reason": "Bad name", "code": "B01" }), 400
+
+    add_user_to_session(token, username)
+    return json.dumps({ "complete": True }), 200
+
+def _validate_session(token):
+    if session.count_documents({ "token": token }) == 0:
+        return json.dumps({ "found": True }), 200
 
 def _send_message(username, token, esm):
     if session.count_documents({ "token": token }) == 0:
-        return { "complete": False, "reason": "Invalid token.", "code": "I01" }
+        return json.dumps({ "complete": False, "reason": "Invalid token.", "code": "I01" }), 400
 
     query = {
         "token": token
@@ -81,10 +114,10 @@ def _send_message(username, token, esm):
             payload.update(template)
 
         temp.insert_one(payload)
-        return { "complete": True }
+        return 200, { "complete": True }
 
     else:
-        return { "complete": False, "reason": "User not in session.", "code": "I02" }
+        return json.dumps({ "complete": False, "reason": "User not in session.", "code": "I02" }), 400
 
 def is_sent_before(username, token, message_id):
     for data in temp.find({ "message_id": message_id, "session": token }):
@@ -93,28 +126,6 @@ def is_sent_before(username, token, message_id):
 
         else:
             return True
-
-def add_user_to_session(token, username):
-    query = {
-        "token": token
-    }
-    payload = {
-        "$addToSet": {
-            "connected_users": username
-        }
-    }
-    session.update_one(query, payload)
-
-def remove_user_from_session(token, username):
-    query = {
-        "token": token
-    }
-    payload = {
-        "$pull": {
-            "connected_users": username
-        }
-    }
-    session.update_one(quey, payload)
 
 def _fetch_messages(username, token):
     if username in connected_users(token):
@@ -148,10 +159,17 @@ def _fetch_messages(username, token):
     else:
         add_user_to_session(token, username)
 
+    return payload
+
 @web.route("/create-session", methods=["POST"])
 def create_session():
     data = request.get_json(force=True)
     return _create_session(username=data["username"])
+
+@web.route("/join-session", methods=["POST"])
+def join_session():
+    data = request.get_json(force=True)
+    return _join_session(username, token)
 
 @web.route("/send-message", methods=["POST"])
 def send_message():
@@ -167,5 +185,10 @@ def fetch_messages():
 def decypher_esm():
     data = request.get_json(force=True)
     return decypher(data["esm"])
+
+@web.route("/validate-session", methods=["POST"])
+def validate_session():
+    data = request.get_json(force=True)
+    return _validate_session(data["token"])
 
 web.run(host="0.0.0.0", port=8080, debug=True)
