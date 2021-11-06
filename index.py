@@ -1,5 +1,6 @@
 import os
 import string
+import random
 from flask import Flask, request
 from .local_cubacrypt import decypher
 from dotenv import find_dotenv, load_dotenv
