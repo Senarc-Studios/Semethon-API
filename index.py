@@ -103,7 +103,7 @@ def _send_message(username, token, esm):
         message_id = f"{message_id}"
         payload = {
             "_id": message_id,
-            "session": token
+            "session": token,
             "esm": esm,
             "users": {}
         }
