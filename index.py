@@ -1,4 +1,5 @@
 import os
+import json
 import string
 import random
 from flask import Flask, request
@@ -84,6 +85,9 @@ def _join_session(username, token):
 
 def _validate_session(token):
     if session.count_documents({ "token": token }) == 0:
+        return json.dumps({ "found": False }), 400
+
+    else:
         return json.dumps({ "found": True }), 200
 
 def _send_message(username, token, esm):
