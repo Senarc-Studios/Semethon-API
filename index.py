@@ -1,5 +1,6 @@
 import os
 import json
+import flask
 import string
 import random
 from flask import Flask, request
@@ -135,7 +136,7 @@ def is_sent_before(username, token, message_id):
         else:
             return True
 
-def _fetch_messages(username, token):
+async def _fetch_messages(username, token):
     if username in connected_users(token):
         for message in temp.find({}):
             if message["session"] == token and is_sent_before(username, token, message["_id"]):
@@ -187,7 +188,10 @@ def send_message():
 @web.route("/fetch-messages", methods=["POST"])
 def fetch_messages():
     data = request.get_json(force=True)
-    return _fetch_messages(data["username"], data["token"])
+    loop = asyncio.get_event_loop()
+    output = loop.run_until_complete(_fetch_messages(data["username"], data["token"]))
+    loop.close()
+    return output
 
 @web.route("/decypher", methods=["POST"])
 def decypher_esm():
@@ -199,4 +203,4 @@ def validate_session():
     data = request.get_json(force=True)
     return _validate_session(data["token"])
 
-web.run(host="0.0.0.0", port=8080, debug=True)
+web.run(host="192.168.100.11", port=8080, debug=True)
