@@ -181,7 +181,7 @@ def create_session():
 @web.route("/join-session", methods=["POST"])
 def join_session():
     data = request.get_json(force=True)
-    return _join_session(username, token)
+    return _join_session(data["username"], data["token"])
 
 @web.route("/send-message", methods=["POST"])
 def send_message():
