@@ -12,9 +12,8 @@ from pymongo import MongoClient
 load_dotenv(find_dotenv())
 mongoclient = MongoClient(get_data("config", "MONGO"))
 mongodb = mongoclient['database']
+session = mongodb['sessions']
 temp = mongodb['temp']
-
-session_increment = []
 
 web = Flask(__name__)
 
