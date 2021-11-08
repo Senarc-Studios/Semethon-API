@@ -30,8 +30,8 @@ def generate_message_id(size=8, chars=string.digits):
 	return ''.join(random.choice(chars) for _ in range(size))
 
 def connected_users(token):
-    for session in session.find({ "token": token }):
-        return session["connected_users"]
+    for sessions in session.find({ "token": token }):
+        return sessions["connected_users"]
 
 def add_user_to_session(token, username):
     query = {
