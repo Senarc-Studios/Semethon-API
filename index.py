@@ -3,13 +3,14 @@ import json
 import flask
 import string
 import random
+from utils import get_data
 from flask import Flask, request
 from local_cubacrypt import decypher
 from dotenv import find_dotenv, load_dotenv
 from pymongo import MongoClient
 
 load_dotenv(find_dotenv())
-mongoclient = MongoClient(os.getenv("MONGO"))
+mongoclient = MongoClient(get_data("MONGO"))
 mongodb = mongoclient['database']
 session = mongodb['sessions']
 temp = mongodb['temp']
