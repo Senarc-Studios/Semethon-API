@@ -155,6 +155,8 @@ async def _fetch_messages(username, token):
                     "author": message["author"],
                     "esm": message["esm"]
                 }
+            else:
+                return 404
 
         await asyncio.sleep(5)
         add_user_to_session(token, username)
