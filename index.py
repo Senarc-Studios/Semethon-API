@@ -125,7 +125,7 @@ def _send_message(username, token, esm):
             payload.update(template)
 
         temp.insert_one(payload)
-        return 200, json.dumps({ "complete": True }), {'content-type': 'application/json'}
+        return json.dumps({ "complete": True }), 200, {'content-type': 'application/json'}
 
     else:
         return json.dumps({ "complete": False, "reason": "User not in session.", "code": "I02" }), 400, {'content-type': 'application/json'}
