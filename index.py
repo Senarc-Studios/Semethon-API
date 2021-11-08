@@ -10,7 +10,7 @@ from dotenv import find_dotenv, load_dotenv
 from pymongo import MongoClient
 
 load_dotenv(find_dotenv())
-mongoclient = MongoClient(get_data("MONGO"))
+mongoclient = MongoClient(get_data("config", "MONGO"))
 mongodb = mongoclient['database']
 session = mongodb['sessions']
 temp = mongodb['temp']
