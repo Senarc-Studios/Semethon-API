@@ -4,7 +4,7 @@ import flask
 import string
 import random
 from flask import Flask, request
-from .local_cubacrypt import decypher
+from local_cubacrypt import decypher
 from dotenv import find_dotenv, load_dotenv
 from pymongo import MongoClient
 
@@ -207,4 +207,4 @@ def validate_session():
     data = request.get_json(force=True)
     return _validate_session(data["token"])
 
-web.run(host="192.168.100.11", port=8080, debug=True)
+web.run(host="1.0.0.2", port=8080, debug=True)
