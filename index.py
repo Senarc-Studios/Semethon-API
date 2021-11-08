@@ -158,11 +158,6 @@ async def _fetch_messages(username, token):
             else:
                 return 404
 
-        await asyncio.sleep(5)
-        add_user_to_session(token, username)
-        await asyncio.sleep(5)
-        remove_user_from_session(token, username)
-
     else:
         add_user_to_session(token, username)
 
