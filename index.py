@@ -86,18 +86,18 @@ def _join_session(username, token):
         return json.dumps({ "complete": False, "reason": "Bad name", "code": "B01" }), 400
 
     add_user_to_session(token, username)
-    return json.dumps({ "complete": True }), 200
+    return json.dumps({ "complete": True }), 200, {'content-type': 'application/json'}
 
 def _validate_session(token):
     if session.count_documents({ "token": token }) == 0:
-        return json.dumps({ "found": False }), 400
+        return json.dumps({ "found": False }), 400, {'content-type': 'application/json'}
 
     else:
-        return json.dumps({ "found": True }), 200
+        return json.dumps({ "found": True }), 200, {'content-type': 'application/json'}
 
 def _send_message(username, token, esm):
     if session.count_documents({ "token": token }) == 0:
-        return json.dumps({ "complete": False, "reason": "Invalid token.", "code": "I01" }), 400
+        return json.dumps({ "complete": False, "reason": "Invalid token.", "code": "I01" }), 400, {'content-type': 'application/json'}
 
     query = {
         "token": token
@@ -109,6 +109,7 @@ def _send_message(username, token, esm):
         payload = {
             "_id": message_id,
             "session": token,
+            "author": username,
             "esm": esm,
             "users": {}
         }
@@ -123,10 +124,10 @@ def _send_message(username, token, esm):
             payload.update(template)
 
         temp.insert_one(payload)
-        return 200, { "complete": True }
+        return 200, json.dumps({ "complete": True }), {'content-type': 'application/json'}
 
     else:
-        return json.dumps({ "complete": False, "reason": "User not in session.", "code": "I02" }), 400
+        return json.dumps({ "complete": False, "reason": "User not in session.", "code": "I02" }), 400, {'content-type': 'application/json'}
 
 def is_sent_before(username, token, message_id):
     for data in temp.find({ "_id": message_id, "session": token }):
@@ -157,6 +158,7 @@ async def _fetch_messages(username, token):
                 temp.update_one(query, update_payload)
 
                 payload = {
+                    "author": message["author"],
                     "esm": message["esm"]
                 }
 
@@ -168,7 +170,7 @@ async def _fetch_messages(username, token):
     else:
         add_user_to_session(token, username)
 
-    return payload
+    return json.dumps(payload), 200, {'content-type': 'application/json'}
 
 @web.route("/create-session", methods=["POST"])
 def create_session():
@@ -193,10 +195,12 @@ def fetch_messages():
     loop.close()
     return output
 
-@web.route("/decypher", methods=["POST"])
+@web.route("/decrypt", methods=["POST"])
 def decypher_esm():
     data = request.get_json(force=True)
-    return decypher(data["esm"])
+    return json.dumps({
+        decypher(data["esm"])
+    }), 200, {'content-type': 'application/json'}
 
 @web.route("/validate-session", methods=["POST"])
 def validate_session():
