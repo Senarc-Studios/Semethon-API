@@ -73,10 +73,6 @@ def _create_session(username):
     }
 
     session.insert_one(payload)
-    if len(session_increment) == 0:
-        session_increment.append(0)
-    else:
-        session_increment.append(len(session_increment))
     return json.dumps({ "token": token }), 200, {'content-type': 'application/json'}
 
 def _join_session(username, token):
