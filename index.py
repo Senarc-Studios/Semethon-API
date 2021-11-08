@@ -12,7 +12,6 @@ from pymongo import MongoClient
 load_dotenv(find_dotenv())
 mongoclient = MongoClient(get_data("config", "MONGO"))
 mongodb = mongoclient['database']
-session = mongodb['sessions']
 temp = mongodb['temp']
 
 session_increment = []
@@ -69,7 +68,6 @@ def _create_session(username):
     token = generate_token()
     token = f"{token}"
     payload = {
-        "_id": len(session_increment),
         "token": token,
         "username": username,
         "connected_users": [username]
