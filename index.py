@@ -115,7 +115,7 @@ def _send_message(username, token, esm):
             "users": {}
         }
 
-        for user in data["connected_users"]:
+        for user in connected_users(token):
             template = {
                 "_id": message_id,
                 "users": {
