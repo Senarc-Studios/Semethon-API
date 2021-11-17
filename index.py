@@ -3,6 +3,7 @@ import json
 import flask
 import string
 import random
+import asyncio
 from utils import get_data
 from flask import Flask, request
 from local_cubacrypt import decypher
@@ -198,4 +199,4 @@ def validate_session():
     data = request.get_json(force=True)
     return _validate_session(data["token"])
 
-web.run(host="1.1.1.2", port=8080, debug=True)
+web.run(host="127.0.0.1", port=8080, debug=True)
