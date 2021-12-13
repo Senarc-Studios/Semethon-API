@@ -29,9 +29,12 @@ def validate_user(
 	):
 	query = {
 		"username": username,
-		"password": password,
-		"token": token
+		"password": password
 	}
+	
+	if token != None:
+		query['token'] = token
+
 	if users.count_documents(query) == 1:
 		return True
 	return False
@@ -108,7 +111,9 @@ def _validate_session(token):
 	else:
 		return json.dumps({ "found": True }), 200, {'content-type': 'application/json'}
 
-def is_sent_before(username, token, message_id):
+def is_sent_before(username, password, token, message_id):
+	if not validate_user(username, password, token):
+		return json.dumps({ "complete": False, "reason": "Invalid Account Details." }), 401, {'content-type': 'application/json'}
 	for data in temp.find({ "_id": message_id, "session": token }):
 		if data["users"][username] == False:
 			return False
@@ -121,12 +126,13 @@ def process_message(data: dict):
 	username = data['username']
 	esm = data['esm']
 
-	if session.count_documents({ "token": token }) == 0:
-		return json.dumps({ "complete": False, "reason": "Invalid token.", "code": "I01" }), 400, {'content-type': 'application/json'}
-
 	query = {
 		"token": token
 	}
+
+	if session.count_documents(query) == 0:
+		return json.dumps({ "complete": False, "reason": "Invalid session token.", "code": "I01" }), 404, {'content-type': 'application/json'}
+
 	if username in connected_users(token):
 
 		message_id = generate_message_id()
@@ -154,12 +160,16 @@ def process_message(data: dict):
 	else:
 		return json.dumps({ "complete": False, "reason": "User not in session.", "code": "I02" }), 400, {'content-type': 'application/json'}
 
-def send_new_messages(username, token):
+def send_new_messages(username, password, token):
+	if not validate_user(username, password, token):
+		return json.dumps({'complete': False, 'reason': "Incorrect Password"}), 401, {'content-type': 'application/json'}
+
 	if username in connected_users(token):
 		for message in temp.find({}):
 			if temp.count_documents({ "session": token }) == 0:
 				return "No new messages", 404
-			if message["session"] == token and is_sent_before(username, token, message["_id"]):
+
+			if message["session"] == token and is_sent_before(username, password, token, message["_id"]):
 				query = {
 					"_id": message["_id"],
 					"session": token,
@@ -183,9 +193,6 @@ def send_new_messages(username, token):
 			else:
 				return "No new messages", 404 
 
-	else:
-		return add_user_to_session(token, username)
-
 	return json.dumps(payload), 200, {'content-type': 'application/json'}
 
 def _delete_session(token, username, password):
@@ -193,11 +200,16 @@ def _delete_session(token, username, password):
 		return json.dumps({'complete': False}), 401, {'content-type': 'application/json'}
 
 	else:
-		payload = {
+		session_payload = {
 			"token": token,
 			"username": username
 		}
-		session.delete_one(payload)
+		user_payload = {
+			"username": username,
+			"password": password
+		}
+		session.delete_one(session_payload)
+		users.delete_one(user_payload)
 		return json.dumps({'complete': True}), 200, {'content-type': 'application/json'}
 
 class CreateSession(BaseModel):
@@ -225,11 +237,11 @@ class EncryptedMessage(BaseModel):
 
 @web.create("/create-session")
 async def create_session(data: CreateSession):
-	return _create_session(username=data["username"])
+	return _create_session(username=data["username"], password=data['password'])
 
 @web.post("/join-session")
 async def join_session(data: Session):
-	return _join_session(data["username"], data["token"])
+	return _join_session(data["username"], data['password'], data["token"])
 
 @web.websocket("/message-sync")
 async def message_sync(websocket: WebSocket):
@@ -237,7 +249,7 @@ async def message_sync(websocket: WebSocket):
 	while True:
 		data = await websocket.receive_json()
 		process_message(data)
-		return send_new_messages(data['username'], data['token'])
+		return send_new_messages(data['username'], data['password'], data['token'])
 
 @web.post("/decrypt")
 async def decypher_esm(data: EncryptedMessage):
@@ -249,7 +261,7 @@ async def decypher_esm(data: EncryptedMessage):
 async def validate_session(data: Session):
 	return _validate_session(data["token"])
 
-@web.delete("delete-session")
+@web.delete("/delete-session")
 async def delete_session(data: Session):
 	return _delete_session(data['token', data['username']], data['password'])
 
