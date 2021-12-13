@@ -1,22 +1,40 @@
 import os
 import json
-import flask
 import string
 import random
 import asyncio
-from utils import get_data
-from flask import Flask, request
-from local_cubacrypt import decypher
+from typing import Optional
+from cool_utils import get_data
+from pydantic import BaseModel
+from fastapi import FastAPI, WebSocket
+from fastapi.reponses import JSONResponse
+from local_cubacrypt import decypher, cypher
 from dotenv import find_dotenv, load_dotenv
 from pymongo import MongoClient
 
 load_dotenv(find_dotenv())
 mongoclient = MongoClient(get_data("config", "MONGO"))
+mongoclient.drop_database('database')
 mongodb = mongoclient['database']
+users = mongodb['users']
 session = mongodb['sessions']
 temp = mongodb['temp']
 
-web = Flask(__name__)
+web = FastAPI()
+
+def validate_user(
+	username,
+	password,
+	token = None
+	):
+	query = {
+		"username": username,
+		"password": password,
+		"token": token
+	}
+	if users.count_documents(query) == 1:
+		return True
+	return False
 
 async def auto_purge_message(message_id):
 	await asyncio.sleep(5)
@@ -52,7 +70,7 @@ def remove_user_from_session(token, username):
 			"connected_users": username
 		}
 	}
-	session.update_one(quey, payload)
+	session.update_one(query, payload)
 
 def validate_username(username):
 	if len(username) >= 20 or len(username) <= 3:
@@ -90,7 +108,19 @@ def _validate_session(token):
 	else:
 		return json.dumps({ "found": True }), 200, {'content-type': 'application/json'}
 
-def _send_message(username, token, esm):
+def is_sent_before(username, token, message_id):
+	for data in temp.find({ "_id": message_id, "session": token }):
+		if data["users"][username] == False:
+			return False
+
+		else:
+			return True
+
+def process_message(data: dict):
+	token = data['token']
+	username = data['username']
+	esm = data['esm']
+
 	if session.count_documents({ "token": token }) == 0:
 		return json.dumps({ "complete": False, "reason": "Invalid token.", "code": "I01" }), 400, {'content-type': 'application/json'}
 
@@ -124,15 +154,7 @@ def _send_message(username, token, esm):
 	else:
 		return json.dumps({ "complete": False, "reason": "User not in session.", "code": "I02" }), 400, {'content-type': 'application/json'}
 
-def is_sent_before(username, token, message_id):
-	for data in temp.find({ "_id": message_id, "session": token }):
-		if data["users"][username] == False:
-			return False
-
-		else:
-			return True
-
-def _fetch_messages(username, token):
+def send_new_messages(username, token):
 	if username in connected_users(token):
 		for message in temp.find({}):
 			if temp.count_documents({ "session": token }) == 0:
@@ -159,44 +181,76 @@ def _fetch_messages(username, token):
 					"esm": message["esm"]
 				}
 			else:
-				return "No new messages", 404
+				return "No new messages", 404 
 
 	else:
 		return add_user_to_session(token, username)
 
 	return json.dumps(payload), 200, {'content-type': 'application/json'}
 
-@web.route("/create-session", methods=["POST"])
-def create_session():
-	data = request.get_json(force=True)
+def _delete_session(token, username, password):
+	if not validate_user(username, password, token):
+		return json.dumps({'complete': False}), 401, {'content-type': 'application/json'}
+
+	else:
+		payload = {
+			"token": token,
+			"username": username
+		}
+		session.delete_one(payload)
+		return json.dumps({'complete': True}), 200, {'content-type': 'application/json'}
+
+class CreateSession(BaseModel):
+	username: str
+	password: str
+
+class Session(BaseModel):
+	username: str
+	password: str
+	token: Optional[str]
+
+class Message(BaseModel):
+	token: str
+	password: str
+	esm: str
+	username: str
+
+class User(BaseModel):
+	token: str
+	password: str
+	username: str
+
+class EncryptedMessage(BaseModel):
+	esm: str
+
+@web.create("/create-session")
+async def create_session(data: CreateSession):
 	return _create_session(username=data["username"])
 
-@web.route("/join-session", methods=["POST"])
-def join_session():
-	data = request.get_json(force=True)
+@web.post("/join-session")
+async def join_session(data: Session):
 	return _join_session(data["username"], data["token"])
 
-@web.route("/send-message", methods=["POST"])
-def send_message():
-	data = request.get_json(force=True)
-	return _send_message(username=data["username"], token=data["token"], esm=data["esm"])
+@web.websocket("/message-sync")
+async def message_sync(websocket: WebSocket):
+	await websocket.accept()
+	while True:
+		data = await websocket.receive_json()
+		process_message(data)
+		return send_new_messages(data['username'], data['token'])
 
-@web.route("/fetch-messages", methods=["POST"])
-def fetch_messages():
-	data = request.get_json(force=True)
-	output = _fetch_messages(data["username"], data["token"])
-	return output
-
-@web.route("/decrypt", methods=["POST"])
-def decypher_esm():
-	data = request.get_json(force=True)
+@web.post("/decrypt")
+async def decypher_esm(data: EncryptedMessage):
 	return json.dumps({
-		decypher(data["esm"])
+		"message": decypher(data["esm"])
 	}), 200, {'content-type': 'application/json'}
 
-@web.route("/validate-session", methods=["POST"])
-def validate_session():
-	data = request.get_json(force=True)
+@web.post("/validate-session")
+async def validate_session(data: Session):
 	return _validate_session(data["token"])
+
+@web.delete("delete-session")
+async def delete_session(data: Session):
+	return _delete_session(data['token', data['username']], data['password'])
 
 web.run(host="127.0.0.1", port=8080, debug=True)
